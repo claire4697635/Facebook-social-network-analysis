@@ -1,0 +1,206 @@
+---
+title: "Facebook Social Network Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Documents/QBS 122/final project")
+edge <- read.table("~/Documents/QBS 122/final project/0.edges")
+featnames <- read.table("~/Documents/QBS 122/final project/0.featnames")
+head(featnames)
+# The features for each of the nodes that appears in the edge file:
+feat <- read.table("~/Documents/QBS 122/final project/0.feat")
+head(feat[,1:6])
+```
+
+
+There are a total number of 225 features. I selected 7 of them and add column names according to the information provided by featnames. The first column in my feature table is to save user ID:
+```{r}
+feature <- as.data.frame(matrix(0,347,8))
+feature[,1] <- feat[,1]
+# the second column is for Birthday info: they break the birth data column into 7 columns, I guess it's for different months. Here I will use numbers from 1 to 7 to represent different birthday info
+for (i in 2:9){
+  feature[,2] <- feature[,2] + feat[,i]*(i-1)
+}
+# the next column is for Education-degree info
+for (i in 22:25){
+  feature[,3] <- feature[,3] + feat[,i]*(i-21)
+}
+# Education- school
+for (i in 25:53){
+  feature[,4] <- feature[,4] + feat[,i]*(i-24)
+}
+# Gender: there are two columns for gender. the 78th column has three 1's and all the left are 0's. The 79th column has around half and half. I assume the 79th column indicates the biological gender = psycological gender, while the 78th means more complicated including transgender. So here I'll just use 79th column:
+feature[,5] <-  + feat[,79]
+# Hometown
+for (i in 80:90){
+  feature[,6] <- feature[,6] + feat[,i]*(i-79)
+}
+# Language
+for (i in 91:104){
+  feature[,7] <- feature[,7] + feat[,i]*(i-90)
+}
+# Location
+for (i in 128:139){
+  feature[,8] <- feature[,8] + feat[,i]*(i-127)
+}
+colnames(feature) <- c("User", "Birthday", "Education degree","Education School","Gender", "Hometown","Languages","Location")
+head(feature)
+edge <- as.data.frame(edge)
+colnames(edge) <- c("source", "target")
+head(edge)
+# Convert the data from edgelist to adjacency matrix:
+library(igraph)
+G <- graph.data.frame(edge,directed=FALSE)
+A <- as_adjacency_matrix(G,type="both",names=TRUE,sparse=FALSE)
+od <- as.numeric(row.names(A))
+A <- A[order(od), ]
+A <- A[,order(od)]
+# number of users/ number of nodes:
+(n_users <- sqrt(length(A)))
+```
+
+### plot the network:
+```{r}
+library(sna)
+pnet <- network(A,directed=FALSE,matrixtype="adjacency")
+par(mfrow=c(1,1))
+plot(pnet,mode="fruchtermanreingold",displaylabels=T, main="Undirected Facebook Friends Network")
+```
+From the network plot above, we can see that it has two main clusters, a bigger one and a smaller one. Each node is connected to at least one other node. It seems like this friend circle actually includes two closed-tied friend circle.
+
+
+```{r}
+detach("package:igraph", unload = TRUE)
+bcent=betweenness(A,gmode="digraph")
+#igraph plots
+library(igraph)
+nodes <- unique(c(edge[,1],edge[,2]))
+gnet <- graph_from_data_frame(d=edge, vertices=nodes, directed=FALSE) #Make graph object
+#print(gnet, e=TRUE, v=TRUE)
+# color by hometown
+V(gnet)$size <- 10
+V(gnet)$color <- feature[,8]
+par(mar=c(0,0,0,0))
+plot(gnet,
+     vertex.color = V(gnet)$color, # change color of nodes
+#     vertex.size = V(gnet)$size,
+     vertex.label.color = "black", # change color of labels
+     vertex.label.cex = .75, # change size of labels to 75% of original size
+     edge.curved=.25, # add a 25% curve to the edges
+     edge.color="grey20", # change edge color to grey
+     edge.arrow.size=0.3)
+```
+As we can see, most of the nodes are blue when we color by location. It is the one major cluster from the network plot. It is because the data I'm using is one of the friend circle from the whole dataset which has 4039 nodes and 88234 edegs - the data is not random, but from a friend circle, so apparently the data has some sort of homogeneity. The plot indicates that most of the people in this friend circle is at the same geolocation, which totally makes sense. 
+
+
+```{r}
+# color by Education school
+V(gnet)$size <- 10
+V(gnet)$color <- feature[,4]
+par(mar=c(0,0,0,0))
+plot(gnet,
+     vertex.color = V(gnet)$color, # change color of nodes
+#     vertex.size = V(gnet)$size,
+     vertex.label.color = "black", # change color of labels
+     vertex.label.cex = .75, # change size of labels to 75% of original size
+     edge.curved=.25, # add a 25% curve to the edges
+     edge.color="grey20", # change edge color to grey
+     edge.arrow.size=0.3)
+```
+The above plot shows a network figure color by school. From my previous experience, when I started to use facebook and add friends since college, my friends are all from the same school. But I only have a few facebook friends so my friend circle is pretty simple. My friends usually have hundreds of friends from different schools - they might be in the same high school, but went to different colleges, or they just met people from different schools in parties. We can see that a little bit less than half of the nodes are yellow, which means that a considerablly large amount of people are from the same school. Noted the way I combined 29 columns of Education-school features from the original feat table, due to that it is a rough way, some people who attended the same high school but not the same college may colored differently - I assume each of the education-school column represents different high schools, universities, private/non-private sort of information. So the nodes with the same color may even have the combination of attending the same high school and universities, or a bad senario which I described at the beginning in the data transformation section.
+
+
+### The Walktrap Community Method on the data to find out the clusters:
+```{r}
+library(cluster)
+wc.base <- walktrap.community(G, steps = 8,
+                  modularity = TRUE)
+wc.base
+dend.g.network <- as.dendrogram(wc.base)
+# dendrogram plot
+plot(dend.g.network, main = "Dendrogram on the Facebook Friend Circle")
+#  walktrap community plot
+plot(wc.base, G, edge.arrow.size = 0.25, main = "Walktrap Community on the Facebook Friend Circle")
+```
+From the above result and the first plot, we can see that the Walkstrap Community method identifies 28 clusters in the friend circle. It may indicates that although some facebook users have diverse background, some of them have a closed relationship as the clusters overlap each other. This can happen for example when people are in the same company, or a team have different background, but they still can form a close relationship to each other.
+
+
+### Descriptive Analysis:
+```{r}
+detach("package:igraph", unload = TRUE) 
+#  number of degrees
+(table(degree(A)))
+(ndegree = sum(A))
+# number of dyads
+(dyadc=dyad.census(A)) # Asym is 0 since it is an undirected network
+# density of the network: # degrees/total edges
+(gden(A)) 
+# degree:
+# since it is a undirected network, there is no difference between in-degree and out-degree. 
+degree <- degree(A,cmode="indegree") 
+# closeness centrality is all just 0's
+#(closeness(A,gmode="digraph"))
+# egenvector centrality: it does not fit in the below plot so I'll not plot the egen distribution
+evcent <- evcent(A,gmode="digraph",use.eigen=FALSE)
+# plot of distributions
+par(mfrow=c(3,1))
+plot(density(degree), col = "blue", main = "Degree distribution")
+plot(density(bcent), col = "red", main = "Betweenness Centrality distribution")
+plot(density(evcent), col = "orange", main = "Egenvector Centrality distribution")
+```
+
+### Modeling facebook social network using StatNet
+```{r}
+#Make network
+library(statnet)
+pnet <- network(A,directed=TRUE,matrixtype="adjacency",
+                vertex.attr=feature[,2:8],
+                vertex.attrnames=c("Birthday", "Education degree","Education School","Gender", "Hometown","Languages","Location"))
+#Modernized the terms in the following models to allowed to be used in short course
+model1a <- ergm(pnet~edges)
+summary(model1a)
+model1b <- ergm(pnet~edges + mutual)
+summary(model1b)
+```
+Since the networks is undirected, adding mutual in model1b won't improve the performance of the model.
+
+Assessing goodness of fit with respect to degree distribution
+```{r}
+library(coda)
+#Assessing Goodness of Fit with Respect to In-Degree Distribution
+model1a.gof <- gof(model1a~idegree,control=control.gof.formula(nsim=100),verbose=T)
+plot(model1a.gof)
+```
+The goodness of fit plot shows that using model1a, the actual degree distribution is not precisely aligned to the box distribution for the whole series of evaluations that corresponds to in-degree.
+
+
+Below is to use maximum pseudo likelihood to refit which is estimated as logistic regression:
+```{r}
+model1c <- ergmMPLE(pnet~edges + mutual + ttriple,output="fit")
+summary(model1c)
+```
+It shows a warning that the standard errors are based on naive pseudolikelihood and are suspect. Plus the p-values are not significant, so this approach is not doing quite well too.
+
+
+Now lets add attribute-based predictors by adding covariates:
+```{r}
+model1e <- ergm(pnet~edges + nodeocov("Location") + nodeocov("Education degree") + nodeocov("Languages") + nodeocov("Birthday") + nodeocov("Hometown") + nodematch("Gender",diff=T))
+summary(model1e)
+model1e.gof <- gof(model1e~idegree,control=control.gof.formula(nsim=100),verbose=T)
+plot(model1e.gof)
+```
+According to the summary of the model, Education degree and birthday are significantly asociated with the network in a positive direction, and language is significantly associated in a negative direction- which makes a totally lot of sense. However, from the above goodness of fit plot, we can see that using model1e, the two distributions are still not aligned so perfectly.
+
+See if adding the term for intransitive triads improves model fit:
+```{r}
+model1g <- ergm(pnet~edges + intransitive +  nodeocov("Location") + nodeocov("Education degree") + nodeocov("Languages") + nodeocov("Birthday") + nodeocov("Hometown") + nodematch("Gender",diff=T))
+summary(model1g)
+model1g.gof <- gof(model1g~idegree,control=control.gof.formula(nsim=100),verbose=F)
+plot(model1g.gof)
+```
+From the above plot, we see that education degree and birthday are still significantly associated with the network in a postive direction, and languge is still significantly associated in a negative direction. As opposed to our hypothesis based on the igraph plot that location might be one of the major actor, it does not show a significant result here. 
