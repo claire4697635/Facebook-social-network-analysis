@@ -39,4 +39,4 @@ My method is to rescale the data sequence from the columns that have the same na
 
 From the igraph plot colored by attributes, we see that most of the users from the network is from the same location. 
 
-According to MCMC diagnostics summary results, we can see that education degree and birthday are significantly asociated with the network in a positive direction, and language is significantly associated in a negative direction.
+According to MCMC diagnostics summary results, we can see that education degree and birthday are significantly asociated with the network in a positive direction, and language is significantly associated in a negative direction. In other words, people with the same education degree, born in same year, same month (zodiac thing probably), etc, have higher probability to know each other, while people who don't speak the same language have less probability to know each other.
